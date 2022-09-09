@@ -1,17 +1,23 @@
-// Database encryption authentication - make changes only in schema.
+// hashing + salting password
 require("dotenv").config();
 const express = require("express");
-const cors  =require("cors");
+const cors  = require("cors");
 const mongoose = require("mongoose");
+//console.log(md5("message"));
+
+const bcrypt = require('bcrypt');
+const saltRounds = 10;
+
 const User = require("./models/user.model");
-const userModel = require("./models/user.model");
 
 const app = express();
 const PORT = process.env.PORT || 5000;
 
 // Database Connection
 const dbURL = process.env.MONGO_URL;
-mongoose.connect(dbURL).then(() =>{
+mongoose
+.connect(dbURL)
+.then(() =>{
     console.log('mongodb atlas is connected');
 })
 .catch((error) => {
@@ -30,12 +36,16 @@ app.get("/",(req, res) => {
 
 // User Registration
 app.post("/register", async(req, res) => {
-    //const {email, password} = req.body; // Data Fetch from user
-    //res.status(201).json({ email, password });
     try {
-        const newUser = new userModel(req.body);
-        await newUser.save(); // New User Data Save in DB
-        res.status(201).json(newUser);
+        bcrypt.hash(req.body.password, saltRounds, async function (err, hash) {
+            const newUser = new User({
+              email: req.body.email,
+              password: hash,
+            });
+            await newUser.save();
+            res.status(201).json(newUser);
+        });       
+
     } catch (error) {
        res.status(500).json(error.message); 
     }
@@ -43,12 +53,17 @@ app.post("/register", async(req, res) => {
 
 // User Loin
 app.post("/login", async(req, res) => {
-    //res.status(200).json({message: "User login Successfully"});
     try {
-        const { email, password } = req.body
+        const email = req.body.email;
+        const password = req.body.password;
         const user = await User.findOne({ email: email });
-        if(user && user.password === password){
-            res.status(200).json({ status: "valid user"});
+        if(user){
+          // Load hash from your password DB.
+            bcrypt.compare(password, user.password, function(err, result) {
+               if(result === true){
+                res.status(200).json({ status: "valid user"});
+               }
+            });
         }else{
             res.status(404).json({ status: "Not valid user"});
             //console.log("User Not Found");
